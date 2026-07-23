@@ -228,7 +228,12 @@ pub(crate) fn sanitize_image_for_upload(body: Vec<u8>, mime: &str) -> Result<Vec
     };
 
     if is_animated_image(&body, mime) {
-        return Ok(body);
+        let stripped = match mime {
+            "image/png" => super::media_animated::strip_animated_png_metadata(&body),
+            "image/webp" => super::media_animated::strip_animated_webp_metadata(&body),
+            _ => None,
+        };
+        return Ok(stripped.unwrap_or(body));
     }
 
     use image::ImageDecoder;
@@ -900,18 +905,12 @@ mod tests {
         apng.extend_from_slice(&[0; 8]);
         apng.extend_from_slice(&[0; 4]);
         assert!(is_animated_image(&apng, "image/png"));
-        assert_eq!(
-            sanitize_image_for_upload(apng.clone(), "image/png").unwrap(),
-            apng
-        );
+        assert!(sanitize_image_for_upload(apng, "image/png").is_ok());
 
         let mut webp = b"RIFF\x0c\0\0\0WEBPANIM".to_vec();
         webp.extend_from_slice(&0u32.to_le_bytes());
         assert!(is_animated_image(&webp, "image/webp"));
-        assert_eq!(
-            sanitize_image_for_upload(webp.clone(), "image/webp").unwrap(),
-            webp
-        );
+        assert!(sanitize_image_for_upload(webp, "image/webp").is_ok());
     }
 
     #[test]
